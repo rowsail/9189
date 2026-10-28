@@ -1,0 +1,17 @@
+# ---------------------------------------------------------------------------
+# NEVER commit device dumps or extracted filesystems: they contain LIVE, PLAIN-
+# TEXT CREDENTIALS from the unit (admin/config passwords in sys/config/sec.0.cfg,
+# NTP keys in ntpkeys.0.cfg, SNMP community strings in snmp.0.cfg) plus logs that
+# may contain site/location data. Keep these local to the machine that made them.
+# ---------------------------------------------------------------------------
+dumps/
+*.bin
+
+# Third-party datasheets (Triscend/GoAhead) are copyrighted by their owners and
+# are not redistributed here; see docs/ notes for where to obtain them.
+docs/*.pdf
+
+# Python / editor noise
+__pycache__/
+*.pyc
+.DS_Store
