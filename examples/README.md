@@ -20,7 +20,13 @@ are deliberately excluded from this repository. Never commit them.
 | `user`   | `user1234`       | read-only |
 | `config` | `config12`       | configuration access |
 | `admin`  | `admin123`       | full administrator |
-| `debug`  | *(hardcoded service account — see the report's security note)* | change/disable in the field |
+| `debug`  | `XD4o5g7b7e6r0T` | hardcoded firmware backdoor — `"Dogbert"` interleaved with `"X457760"` (see report §7.1) |
 
 If you have recovered or reset a unit, **change these immediately** — they are public and
 identical across all units of this firmware.
+
+The `debug` password isn't generated per unit; it's a fixed string compiled into the
+firmware, built by interleaving **"Dogbert"** (the *Dilbert* character) with `X457760`. A
+permanent backdoor hidden behind a cartoon in-joke — very much *The IT Crowd* "amateur hour"
+school of security. It can't be removed without reflashing, so isolate these units'
+management interfaces on a trusted network.
