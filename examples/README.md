@@ -27,6 +27,7 @@ identical across all units of this firmware.
 
 The `debug` password isn't generated per unit; it's a fixed string compiled into the
 firmware, built by interleaving **"Dogbert"** (the *Dilbert* character) with `X457760`. A
-permanent backdoor hidden behind a cartoon in-joke — very much *The IT Crowd* "amateur hour"
-school of security. It can't be removed without reflashing, so isolate these units'
-management interfaces on a trusted network.
+permanent backdoor hidden behind a cartoon in-joke. As Maurice Moss put it in *The IT Crowd*
+("The Red Door", 2006), on finding an engineer who "run the data lines right through the
+power supply": **"Amateur hour! I've got tears in my eyes!"** It can't be removed without
+reflashing, so isolate these units' management interfaces on a trusted network.
