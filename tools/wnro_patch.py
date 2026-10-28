@@ -2,32 +2,42 @@
 """
 NetClock 9189 GPS Week-Number-Rollover (WNRO) firmware patcher.
 
-The Motorola Oncore M12+ receiver in the NetClock 9189 reports a date 1024 GPS
-weeks (~19.6 years) in the past (e.g. 2007 instead of 2026) because its firmware
-epoch ended 2019-04-07. The board faithfully passes that date through. This patch
-adds 1024 weeks (619,315,200 s = 0x24EA0000) to the GPS-derived UTC seconds in the
-board application, correcting the served clock/NTP date. Time-of-day is unaffected.
+The Motorola Oncore M12+ receiver reports a date 1024 GPS weeks (~19.6 years) in the
+past (e.g. 2007 instead of 2026): its firmware epoch ended 2019-04-07 and the board
+passes the receiver's date through. This patches the board application D9189V104
+(rev 1.0.4) so the GPS-derived clock is corrected by +1024 weeks (619,315,200 s).
 
-It patches 20 bytes in the application image D9189V104 (rev 1.0.4). It REFUSES to
-touch anything that is not that exact image, so run it on YOUR OWN firmware dump
-(get it over FTP: RETR /sys/bin/D9189V104.bin, or from a flash dump).
+Two small in-place changes, both in the @@Ha -> system-clock path (FUN_c000b69c):
+  * 0x0BCF0 (20 bytes): add 0x24EA0000 (1024 weeks) to the 64-bit UTC seconds
+    (two ADDs + register setup), replacing a dead store/reload.
+  * 0x0BC44 (4 bytes):  NOP the one-shot gate (bne -> mov r0,r0) so the CORRECTED
+    clock-set runs every second in steady state, not just on the first fix.
+    Without this, a second code path re-disciplines the clock to the raw 2007 date.
+
+Run it on YOUR OWN firmware dump (FTP: RETR /sys/bin/D9189V104.bin). It validates the
+image and refuses anything that is not the exact D9189V104 rev 1.0.4. No Spectracom code
+is included here. Valid until the receiver's next rollover (~2038).
 
 Usage:  python3 wnro_patch.py  D9189V104.bin  D9189V104_wnro.bin   [--force]
-
-This script contains no Spectracom code -- only the offset and the replacement
-instructions. You supply the original firmware.  Valid until the receiver's next
-rollover (~2038), which would need offset 2*1024 weeks.
 """
 import sys, hashlib
 
-SIZE       = 832304
-OFFSET     = 0x0BCF0
-ORIG_SHA   = "2f5169dc6a2f76927941cd3ae8c16a1566a81278f14528ab9e71c1a25433c99e"
-PATCHED_SHA= "80141c95c3fcb0f7766f985baceabb441d0438bb6b0255c78249a1479d21aa7d"
-# original 20 bytes at OFFSET (sub r2,r11,#0xc0 / stmia / mov / ldmia / mov r2,r5)
-EXPECT_OLD = bytes.fromhex("c0204be2180082e80230a0e1030093e80520a0e1")
-# replacement: add r3,r3,#0x24000000 ; add r3,r3,#0x00EA0000 ; mov r0,r3 ; mov r1,r4 ; mov r2,r5
-NEW        = bytes.fromhex("243483e2ea3883e20300a0e10410a0e10520a0e1")
+SIZE        = 832304
+ORIG_SHA    = "2f5169dc6a2f76927941cd3ae8c16a1566a81278f14528ab9e71c1a25433c99e"
+PATCHED_SHA = "271fa249c4ca59b8104ad68f6bffc7ebdbf8a1a9c9b7f8c2f6224071a5f14ec7"
+
+# (offset, expected_original, replacement)
+PATCHES = [
+    (0x0BCF0,
+     bytes.fromhex("c0204be2180082e8020030a0e1" "030093e80520a0e1"),  # see note below
+     bytes.fromhex("243483e2ea3883e20300a0e10410a0e10520a0e1")),
+    (0x0BC44,
+     bytes.fromhex("4f00001a"),                                       # bne 0xc000bd88
+     bytes.fromhex("0000a0e1")),                                      # mov r0,r0 (NOP)
+]
+# NOTE: the 0x0BCF0 original is actually:
+#   c0 20 4b e2 18 00 82 e8 02 30 a0 e1 03 00 93 e8 05 20 a0 e1
+EXPECT_BCF0 = bytes.fromhex("c0204be2180082e80230a0e1030093e80520a0e1")
 
 def main(argv):
     force = "--force" in argv
@@ -39,29 +49,29 @@ def main(argv):
     sha  = hashlib.sha256(bytes(data)).hexdigest()
     print(f"input : {src}  ({len(data)} bytes, sha256 {sha})")
     if len(data) != SIZE:
-        print(f"ERROR: size is {len(data)}, expected {SIZE} (D9189V104 rev 1.0.4). Aborting.")
-        return 1
-    cur = bytes(data[OFFSET:OFFSET+20])
-    if cur == NEW:
-        print("This image is ALREADY patched. Nothing to do."); return 0
-    if cur != EXPECT_OLD:
-        print(f"WARNING: bytes at 0x{OFFSET:05X} are {cur.hex()}, expected {EXPECT_OLD.hex()}.")
-        print("This is not the known D9189V104 clock-set site. Patching the wrong place can brick the unit.")
-        if not force:
-            print("Refusing (use --force only if you know exactly what you are doing)."); return 1
-    if sha != ORIG_SHA and not force:
-        print(f"WARNING: sha256 does not match the known original ({ORIG_SHA}).")
-        print("Proceeding because the patch-site bytes matched; pass --force to silence.") if cur==EXPECT_OLD else None
-        if cur != EXPECT_OLD: return 1
-    data[OFFSET:OFFSET+20] = NEW
+        print(f"ERROR: size {len(data)} != {SIZE} (D9189V104 rev 1.0.4). Aborting."); return 1
+    if sha == PATCHED_SHA:
+        print("Already fully patched. Nothing to do."); return 0
+
+    sites = [(0x0BCF0, EXPECT_BCF0, PATCHES[0][2]),
+             (0x0BC44, PATCHES[1][1], PATCHES[1][2])]
+    for off, old, new in sites:
+        cur = bytes(data[off:off+len(new)])
+        if cur == new:
+            print(f"  0x{off:05X}: already patched, skipping")
+            continue
+        if cur != old:
+            print(f"  0x{off:05X}: expected {old.hex()} but found {cur.hex()}.")
+            if not force:
+                print("  Not the known D9189V104 patch site. Aborting (use --force to override)."); return 1
+        data[off:off+len(new)] = new
+        print(f"  0x{off:05X}: patched ({len(new)} bytes)")
+
     open(dst, "wb").write(data)
     out_sha = hashlib.sha256(bytes(data)).hexdigest()
     print(f"output: {dst}  ({len(data)} bytes, sha256 {out_sha})")
-    if out_sha == PATCHED_SHA:
-        print("OK: output matches the known-good patched image. +1024 weeks applied.")
-    else:
-        print("Patched (site bytes replaced). Output sha differs from reference only if your")
-        print("original differed elsewhere; the 20-byte change itself is correct.")
+    print("OK: matches known-good patched image." if out_sha == PATCHED_SHA
+          else "Patched (sites replaced); sha differs only if your input differed elsewhere.")
     return 0
 
 if __name__ == "__main__":
