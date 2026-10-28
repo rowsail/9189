@@ -11,6 +11,9 @@ dumps/
 # are not redistributed here; see docs/ notes for where to obtain them.
 docs/*.pdf
 
+# Local-only working notes — not for publication
+private/
+
 # Python / editor noise
 __pycache__/
 *.pyc
