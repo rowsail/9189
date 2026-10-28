@@ -238,14 +238,34 @@ firmware**. The firmware (`D9189V104.bin`) contains this account table:
 | `user`   | `user1234`       | read-only |
 | `config` | `config12`       | configuration access |
 | `admin`  | `admin123`       | full administrator |
-| `debug`  | *(withheld)*      | **hardcoded service/debug account** — value intentionally not published |
+| `debug`  | `XD4o5g7b7e6r0T`  | **hardcoded service/debug backdoor** (see below) |
+
+#### The `debug` backdoor and how its password is built
+
+The `debug` account is a **hardcoded credential compiled into the firmware image**. It is
+*not* generated per unit — there is no serial/MAC/date input and no hashing in the auth
+path (the device stores and compares login passwords in clear text). The literal
+`XD4o5g7b7e6r0T` appears exactly once in `D9189V104.bin`, sitting in the default-accounts
+table right beside `user1234`/`config12`/`admin123`. It is therefore **identical on every
+unit running this firmware** and cannot be removed without reflashing.
+
+The string is an obfuscated vanity password: two strings interleaved character by character.
+
+```
+X D 4 o 5 g 7 b 7 e 6 r 0 T
+ └ even positions ─────────┘  ->  D o g b e r T   =  "Dogbert"  (the Dilbert character)
+X   4   5   7   7   6   0        ->  X 4 5 7 7 6 0   =  "X457760"
+```
+
+So `XD4o5g7b7e6r0T` is just **"Dogbert"** interleaved with **`X457760`** — looks random,
+but it's a deliberate human-chosen backdoor.
 
 > **Security note.** `admin`/`config`/`user` are the documented factory defaults — change
-> them on any unit in service. The `debug` account is a **hardcoded credential baked into
-> the firmware image**, identical across all units of this (long-EOL, ~2003) firmware and
-> not resettable from the UI. It is documented here as a defensive finding: if you operate
-> one of these units, isolate its management interfaces (serial/telnet/web/SNMP) on a
-> trusted network — the backdoor cannot be removed without new firmware.
+> them on any unit in service. The `debug` account is a permanent backdoor baked into the
+> firmware, the same on all units of this (long-EOL, ~2003) product and not resettable from
+> the UI. It is documented here as a defensive finding: if you operate one of these units,
+> isolate its management interfaces (serial/telnet/web/SNMP) on a trusted network — the only
+> true fix is firmware that removes the account.
 
 ---
 
