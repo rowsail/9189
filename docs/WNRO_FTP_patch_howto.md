@@ -14,10 +14,17 @@ no JTAG, and serial only if you need to recover a bad flash.
 > The +1024‑week correction is valid until the receiver's next rollover (~2038).
 
 ## What the patch does
-Application `D9189V104.bin`, 20 bytes at file offset **0x0BCF0**, in the `@@Ha` →
-system‑clock path. It replaces the dead store/reload between the firmware's mktime and
-gmtime with two `add` instructions that add `0x24EA0000` (1024 weeks) to the 64‑bit UTC
-seconds. Same size, in place, no calendar math. (Details & RE in the patcher source.)
+Four small in‑place changes to `D9189V104.bin`, all in the `@@Ha` → system‑clock path
+(`FUN_c000b69c`), applied by the patcher. Same size, no code cave, no calendar math:
+- **0x0BCF0 (20 bytes):** add `0x24EA0000` (1024 weeks) to the 64‑bit seconds — corrects the date.
+- **0x0BC44 (4 bytes):** NOP a one‑shot gate so the corrected clock‑set runs every second in
+  steady state (otherwise a second path re‑disciplines the clock to the raw 2007 date).
+- **0x0BCE8 + 0x0BCEC (4+4 bytes):** NOP that path's leap‑second subtraction. The time it reads
+  is already UTC, so the extra subtraction left the clock 18 s slow; removing it restores
+  correct time‑of‑day alongside the corrected date.
+
+Verified on hardware: a 3D fix yields the correct date **and** time (offset <1 s vs public NTP),
+with NTP reporting LI=0 (synchronized). (Full RE in the patcher source and repo notes.)
 
 ## You need
 - Python 3, and `tools/wnro_patch.py` from this repo.

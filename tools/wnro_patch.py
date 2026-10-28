@@ -24,7 +24,7 @@ import sys, hashlib
 
 SIZE        = 832304
 ORIG_SHA    = "2f5169dc6a2f76927941cd3ae8c16a1566a81278f14528ab9e71c1a25433c99e"
-PATCHED_SHA = "271fa249c4ca59b8104ad68f6bffc7ebdbf8a1a9c9b7f8c2f6224071a5f14ec7"
+PATCHED_SHA = "897993f4660cb17c8371edba1b227376930c758987cbdd3e5354ac9e9f44312b"
 
 # (offset, expected_original, replacement)
 PATCHES = [
@@ -53,8 +53,12 @@ def main(argv):
     if sha == PATCHED_SHA:
         print("Already fully patched. Nothing to do."); return 0
 
-    sites = [(0x0BCF0, EXPECT_BCF0, PATCHES[0][2]),
-             (0x0BC44, PATCHES[1][1], PATCHES[1][2])]
+    sites = [
+        (0x0BCF0, EXPECT_BCF0,                    bytes.fromhex("243483e2ea3883e20300a0e10410a0e10520a0e1")),  # +1024 weeks
+        (0x0BC44, bytes.fromhex("4f00001a"),      bytes.fromhex("0000a0e1")),  # NOP one-shot gate (bne)
+        (0x0BCE8, bytes.fromhex("023053e0"),      bytes.fromhex("0000a0e1")),  # NOP leap subs
+        (0x0BCEC, bytes.fromhex("c24fc4e0"),      bytes.fromhex("0000a0e1")),  # NOP leap sbc
+    ]
     for off, old, new in sites:
         cur = bytes(data[off:off+len(new)])
         if cur == new:
